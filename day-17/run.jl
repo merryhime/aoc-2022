@@ -38,8 +38,12 @@ const start_x = 2
 const start_y_gap = 3
 const screen_width = 7
 const move_left = (-1, 0)
-const move_right = (1, 0)
+const move_right = (+1, 0)
 const move_down = (0, -1)
+
+mutable struct CycleState
+    tallest::Int
+end
 
 mutable struct BoardState
     set::Set{Pos}
@@ -73,23 +77,60 @@ end
 function drop_pieces(state::BoardState, count::Int)
     for i ∈ 1:count
         drop_piece(state, popfirst!(state.shapelist))
+        if i % 100 == 0
+            garbage_collect(state)
+        end
     end
 end
 
+function garbage_collect(state::BoardState)
+    state.set = filter(x -> x[2] + 1000 > state.tallest, state.set)
+end
+
 function part1(infile)
-    dirlist = Iterators.Stateful(Iterators.cycle(collect(read(infile, String))))
+    dirlist = Iterators.Stateful(Iterators.cycle(collect(strip(read(infile, String)))))
     shapelist = Iterators.Stateful(Iterators.cycle(shapes))
     state = BoardState(Set(), dirlist, shapelist, 0)
     drop_pieces(state, 2022)
     state.tallest
 end
 
+is_cycle(list, k) = !any([a != b for (a, b) ∈ Iterators.zip(list, Iterators.cycle(list[1:k]))])
+
 function part2(infile)
-    dirlist = Iterators.Stateful(Iterators.cycle(collect(read(infile, String))))
+    dirlist = Iterators.Stateful(Iterators.cycle(collect(strip(read(infile, String)))))
+    shapelist = Iterators.Stateful(Iterators.cycle(shapes))
+    base_cycle_count = length(strip(read(infile, String))) * length(shapes)
+    state = BoardState(Set(), dirlist, shapelist, 0)
+    initial_length = base_cycle_count * 50
+    drop_pieces(state, initial_length) # stabilise
+    prev = state.tallest
+    sequence = Int[]
+    for i ∈ 1:1000
+        drop_pieces(state, base_cycle_count)
+        push!(sequence, state.tallest - prev)
+        print(i, "\r")
+        prev = state.tallest
+    end
+    kk = 0
+    for k ∈ 1:1000
+        if is_cycle(sequence, k)
+            display(k)
+            kk = k
+            break
+        end
+    end
+
+    remaining = 1000000000000 - initial_length
+    rep_count = remaining ÷ (base_cycle_count * kk)
+    remaining = remaining % (base_cycle_count * kk)
+
+    dirlist = Iterators.Stateful(Iterators.cycle(collect(strip(read(infile, String)))))
     shapelist = Iterators.Stateful(Iterators.cycle(shapes))
     state = BoardState(Set(), dirlist, shapelist, 0)
-    drop_pieces(state, 1000000000000)
-    state.tallest
+    drop_pieces(state, initial_length + remaining)
+
+    rep_count * sum(sequence[1:kk]) + state.tallest
 end
 
 print("test part 1: ", part1("testinput"), "\n")
